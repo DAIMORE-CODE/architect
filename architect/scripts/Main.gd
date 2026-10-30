@@ -12,7 +12,11 @@ func _ready() -> void:
 	# инициализированы к этому моменту — порядок задан в project.godot.
 	YandexSDK.notify_game_ready()
 	# Шаг 2: главный экран игры (Hub). Старый статус-каркас Шага 1 скрыт.
-	var hub := load("res://scenes/screens/HubScreen.tscn").instantiate()
+	var hub_scene := load("res://scenes/screens/HubScreen.tscn") as PackedScene
+	if hub_scene == null:
+		push_error("Main: не удалось загрузить HubScreen.tscn")
+		return
+	var hub: Control = hub_scene.instantiate()
 	hub.name = "HubScreen"
 	add_child(hub)
 	if status_label != null:
@@ -20,10 +24,6 @@ func _ready() -> void:
 	if ad_test_button != null:
 		ad_test_button.visible = false
 	_update_status()
-	GameData.coins_changed.connect(func(_v): _update_status())
-	GameData.energy_changed.connect(func(_c, _m): _update_status())
-	# Временная кнопка для проверки stub-рекламы (удалим на Шаге 2).
-	ad_test_button.pressed.connect(_on_ad_test_pressed)
 
 func _update_status() -> void:
 	var sdk_mode := "web" if OS.has_feature("web") else "stub"
@@ -36,15 +36,3 @@ func _update_status() -> void:
 		sdk_mode,
 	]
 	status_label.text = "Мастерская реставрации — Шаг 1 (каркас)\n" + info
-
-func _on_ad_test_pressed() -> void:
-	ad_test_button.disabled = true
-	ad_test_button.text = "Реклама… (stub: 2 сек)"
-	YandexSDK.show_rewarded_ad(_on_rewarded)
-
-func _on_rewarded(viewed: bool) -> void:
-	ad_test_button.disabled = false
-	ad_test_button.text = "Тест rewarded-рекламы"
-	if viewed:
-		GameData.add_coins(50)
-		print("Main: реклама просмотрена (stub), +50 монет")
