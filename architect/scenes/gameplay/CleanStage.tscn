@@ -54,7 +54,21 @@ layout_mode = 2
 text_overrun_behavior = 3
 text = "Назад"
 
-[node name="WorkArea" type="Control" parent="."]
+[node name="WorkMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 64.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="WorkArea" type="Control" parent="WorkMargin"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -64,7 +78,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 1
 
-[node name="ItemClean" type="TextureRect" parent="WorkArea"]
+[node name="ItemClean" type="TextureRect" parent="WorkMargin/WorkArea"]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -82,7 +96,7 @@ texture = ExtResource("2_watch")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="DirtLayer" type="TextureRect" parent="WorkArea"]
+[node name="DirtLayer" type="TextureRect" parent="WorkMargin/WorkArea"]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
