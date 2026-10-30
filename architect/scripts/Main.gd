@@ -11,6 +11,14 @@ func _ready() -> void:
 	# Автозагрузки (DayCycle -> GameData -> SaveManager -> YandexSDK) уже
 	# инициализированы к этому моменту — порядок задан в project.godot.
 	YandexSDK.notify_game_ready()
+	# Шаг 2: главный экран игры (Hub). Старый статус-каркас Шага 1 скрыт.
+	var hub := load("res://scenes/screens/HubScreen.tscn").instantiate()
+	hub.name = "HubScreen"
+	add_child(hub)
+	if status_label != null:
+		status_label.visible = false
+	if ad_test_button != null:
+		ad_test_button.visible = false
 	_update_status()
 	GameData.coins_changed.connect(func(_v): _update_status())
 	GameData.energy_changed.connect(func(_c, _m): _update_status())

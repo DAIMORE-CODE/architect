@@ -1,0 +1,156 @@
+[gd_scene load_steps=3 format=3 uid="uid://chubscreen001"]
+
+[ext_resource type="Script" path="res://scripts/screens/HubScreen.gd" id="1_hub"]
+[ext_resource type="PackedScene" uid="uid://chudtopbar01" path="res://scenes/ui/HUD_TopBar.tscn" id="2_topbar"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_workbench"]
+bg_color = Color(0.24, 0.2, 0.16, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.45, 0.38, 0.3, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[node name="HubScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_hub")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.13, 0.11, 0.1, 1)
+
+[node name="RootMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="RootMargin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TopBar" parent="RootMargin/VBox" instance=ExtResource("2_topbar")]
+layout_mode = 2
+
+[node name="WorkbenchArea" type="Control" parent="RootMargin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Workbench" type="Panel" parent="RootMargin/VBox/WorkbenchArea"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -160.0
+offset_top = -140.0
+offset_right = 160.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_workbench")
+
+[node name="ItemPlaceholder" type="TextureRect" parent="RootMargin/VBox/WorkbenchArea/Workbench"]
+self_modulate = Color(1, 1, 1, 0.55)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -48.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="WorkbenchTitle" type="Label" parent="RootMargin/VBox/WorkbenchArea/Workbench"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 8.0
+offset_bottom = 40.0
+grow_horizontal = 2
+text = "Сегодня: Старинные часы"
+horizontal_alignment = 1
+
+[node name="WorkbenchSubtitle" type="Label" parent="RootMargin/VBox/WorkbenchArea/Workbench"]
+modulate = Color(1, 1, 1, 0.6)
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -44.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "Требуется реставрация (плейсхолдер до AI-графики)"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ButtonsBox" type="HBoxContainer" parent="RootMargin/VBox"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="BtnStart" type="Button" parent="RootMargin/VBox/ButtonsBox"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Начать реставрацию"
+
+[node name="BtnMuseum" type="Button" parent="RootMargin/VBox/ButtonsBox"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Музей"
+
+[node name="BtnShop" type="Button" parent="RootMargin/VBox/ButtonsBox"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Магазин"
+
+[node name="BtnDaily" type="Button" parent="RootMargin/VBox/ButtonsBox"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Ежедневная награда"
+
+[node name="DailyDot" type="ColorRect" parent="RootMargin/VBox/ButtonsBox/BtnDaily"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -22.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = 22.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.9, 0.15, 0.15, 1)
+
