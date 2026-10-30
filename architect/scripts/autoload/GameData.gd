@@ -11,17 +11,21 @@ signal data_loaded
 const START_COINS: int = 100
 const MAX_ENERGY_PER_DAY: int = 5  # 5 бесплатных реставраций в день (ТЗ, удержание)
 
+var _loading := false
+
 var coins: int = START_COINS:
 	set(value):
 		coins = maxi(0, value)
 		coins_changed.emit(coins)
-		SaveManager.request_save()
+		if not _loading:
+			SaveManager.request_save()
 
 var energy_current: int = MAX_ENERGY_PER_DAY:
 	set(value):
 		energy_current = clampi(value, 0, MAX_ENERGY_PER_DAY)
 		energy_changed.emit(energy_current, MAX_ENERGY_PER_DAY)
-		SaveManager.request_save()
+		if not _loading:
+			SaveManager.request_save()
 
 ## id предметов, сданных в музей: { "watch_rusty_01": true, ... }
 var museum_items: Dictionary = {}
@@ -122,9 +126,14 @@ func to_dict() -> Dictionary:
 	}
 
 func from_dict(data: Dictionary) -> void:
+	_loading = true
 	coins = int(data.get("coins", START_COINS))
 	energy_current = int(data.get("energy_current", MAX_ENERGY_PER_DAY))
-	museum_items = data.get("museum_items", {})
-	upgrades = data.get("upgrades", {})
-	consumables = data.get("consumables", {})
+	if typeof(data.get("museum_items", {})) == TYPE_DICTIONARY:
+		museum_items = data["museum_items"]
+	if typeof(data.get("upgrades", {})) == TYPE_DICTIONARY:
+		upgrades = data["upgrades"]
+	if typeof(data.get("consumables", {})) == TYPE_DICTIONARY:
+		consumables = data["consumables"]
+	_loading = false
 	data_loaded.emit()

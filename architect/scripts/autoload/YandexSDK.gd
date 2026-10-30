@@ -16,6 +16,7 @@ var _ad_showing := false
 var _is_web := false
 var _js_callbacks := {}
 var _next_callback_id := 1
+var _global_registered := false
 
 func _ready() -> void:
 	_is_web = OS.has_feature("web")
@@ -135,12 +136,13 @@ func _register_callback(callback: Callable) -> int:
 	# Реестр id -> Callable. JS при завершении рекламы вызывает on_godot_cb(id, ok),
 	# которая пробрасывает вызов в Godot-глобалку __godot_cb_pump.
 	# Вызывается только из web-ветки show_rewarded_ad, но guard дублируем (требование ТЗ).
-	if _js_callbacks.is_empty():
-		_js_eval("""window.on_godot_cb = function(id, ok) {
+	if _is_web and not _global_registered:
+		_global_registered = true
+		JavaScriptBridge.eval("""window.on_godot_cb = function(id, ok) {
 			if (typeof __godot_cb_pump === 'function') { __godot_cb_pump(id, ok); }
 		};""")
-		if _is_web:
-			JavaScriptBridge.register_global("__godot_cb_pump", _on_js_callback)
+		# Используем call(), чтобы парсер GDScript в editor/Android не падал на несуществующем методе
+		JavaScriptBridge.call("register_global", "__godot_cb_pump", _on_js_callback)
 	var id := _next_callback_id
 	_next_callback_id += 1
 	_js_callbacks[id] = callback

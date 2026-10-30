@@ -20,14 +20,15 @@ func _check_new_day_on_start() -> void:
 	var today := _today()
 	if first_play_date.is_empty():
 		first_play_date = today
-	if last_visit_date != today:
-		# Новый день: стрик продолжается, если пришли ровно назавтра;
-		# пропуск дня сбрасывает цикл на начало (ТЗ, ежедневная награда).
-		if not last_visit_date.is_empty() and last_visit_date != _yesterday_of(today):
-			daily_streak = 0
-		last_visit_date = today
+	if last_visit_date == today:
+		return
+	var is_first_install := last_visit_date.is_empty()
+	if not is_first_install and last_visit_date != _yesterday_of(today):
+		daily_streak = 0
+	last_visit_date = today
+	if not is_first_install:
 		new_day.emit(get_day_index())
-		daily_reward_state_changed.emit()
+	daily_reward_state_changed.emit()
 
 func get_day_index() -> int:
 	## Сколько дней прошлось с первого запуска (0 в день установки).

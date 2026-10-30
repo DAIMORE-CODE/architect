@@ -67,11 +67,13 @@ func _read_file() -> Dictionary:
 		return {}
 	var text := f.get_as_text()
 	f.close()
-	var parsed = JSON.parse_string(text)
-	if typeof(parsed) != TYPE_DICTIONARY:
-		push_warning("SaveManager: сохранение повреждено, начинаем заново")
+	var json := JSON.new()
+	var err := json.parse(text)
+	if err != OK or typeof(json.data) != TYPE_DICTIONARY:
+		push_warning("SaveManager: сохранение повреждено (err=%s), начинаем заново" % error_string(err))
+		DirAccess.rename_absolute(SAVE_PATH, SAVE_PATH + ".bak")
 		return {}
-	return parsed
+	return json.data
 
 func _notification(what: int) -> void:
 	match what:
