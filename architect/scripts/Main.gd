@@ -19,6 +19,17 @@ func _ready() -> void:
 	var hub: Control = hub_scene.instantiate()
 	hub.name = "HubScreen"
 	add_child(hub)
+	# Подключаем мини-игру «Очистка» (Шаг 3): переход по сигналу Hub,
+	# возврат — кнопкой «Назад» внутри CleanStage (reload_current_scene).
+	var clean_scene := load("res://scenes/gameplay/CleanStage.tscn") as PackedScene
+	if clean_scene != null:
+		var on_clean := func() -> void:
+			var stage: Control = clean_scene.instantiate()
+			stage.name = "CleanStage"
+			add_child(stage)
+		hub.clean_requested.connect(on_clean)
+	else:
+		push_warning("Main: не удалось загрузить CleanStage.tscn (шаг 3)")
 	if status_label != null:
 		status_label.visible = false
 	if ad_test_button != null:

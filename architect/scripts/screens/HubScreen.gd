@@ -7,6 +7,9 @@ extends Control
 ## энергии; HubScreen НЕ трогает их лейблы напрямую. Подписка на сигналы —
 ## в _enter_tree(), отписка — в _exit_tree() (без утечек при смене экранов).
 
+## Сигнал перехода на этап очистки (подключается роутером Main.gd, Шаг 3).
+signal clean_requested
+
 # --- Привязка узлов (явные пути, @onready вместо @export) -------------------
 
 @onready var top_bar: CanvasItem = $RootMargin/VBox/TopBar
@@ -81,8 +84,9 @@ func _on_start_pressed() -> void:
 		print("[STUB] Показать диалог нехватки энергии")
 		return
 	GameData.spend_energy()
-	# Экран очистки (мини-игра «Очистка», старые часы) реализуем на Шаге 3.
+	# Шаг 3: переход на мини-игру «Очистка» — сигнал подхватывает роутер Main.gd.
 	print("[STUB] Переход на экран очистки")
+	clean_requested.emit()
 
 func _on_museum_pressed() -> void:
 	# Музей — Шаг 5.

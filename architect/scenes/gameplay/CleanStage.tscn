@@ -1,0 +1,101 @@
+[gd_scene load_steps=4 format=3 uid="uid://c1x7kq3m2v9ta"]
+
+[ext_resource type="Script" path="res://scripts/gameplay/CleanStage.gd" id="1_clean"]
+[ext_resource type="Texture2D" path="res://assets/items/watch_clean.png" id="2_watch"]
+[ext_resource type="Texture2D" path="res://assets/items/watch_dirt.png" id="3_dirt"]
+
+[node name="CleanStage" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_clean")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.11, 0.09, 0.08, 1)
+
+[node name="TopBar" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = 56.0
+grow_horizontal = 2
+theme_override_constants/separation = 16
+
+[node name="Progress" type="ProgressBar" parent="TopBar"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.4
+show_percentage = false
+step = 0.01
+max_value = 1.0
+
+[node name="Spacer" type="Control" parent="TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.6
+
+[node name="BtnBack" type="Button" parent="TopBar"]
+custom_minimum_size = Vector2(110, 44)
+layout_mode = 2
+text_overrun_behavior = 3
+text = "Назад"
+
+[node name="WorkArea" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 64.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="ItemClean" type="TextureRect" parent="WorkArea"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -210.0
+offset_top = -280.0
+offset_right = 210.0
+offset_bottom = 280.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_watch")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="DirtLayer" type="TextureRect" parent="WorkArea"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -210.0
+offset_top = -280.0
+offset_right = 210.0
+offset_bottom = 280.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+texture = ExtResource("3_dirt")
+expand_mode = 1
+stretch_mode = 5
