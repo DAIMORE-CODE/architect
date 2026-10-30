@@ -11,8 +11,16 @@ config_version=5
 [application]
 
 config/name="architect"
+run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+
+[autoload]
+
+DayCycle="*res://scripts/autoload/DayCycle.gd"
+GameData="*res://scripts/autoload/GameData.gd"
+SaveManager="*res://scripts/autoload/SaveManager.gd"
+YandexSDK="*res://scripts/autoload/YandexSDK.gd"
 
 [display]
 
