@@ -89,6 +89,14 @@ texture = ExtResource("2_watch")
 expand_mode = 1
 stretch_mode = 4
 
-[node name="DirtLayer" type="Sprite2D" parent="WorkMargin/WorkArea"]
-centered = false
+[node name="DirtLayer" type="TextureRect" parent="WorkMargin/WorkArea"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 texture = ExtResource("3_dirt")
+expand_mode = 1
+stretch_mode = 4
