@@ -12,8 +12,11 @@ const START_COINS: int = 100
 
 # ВРЕМЕННО (для тестирования прототипа): увеличено на несколько реставраций сразу.
 # TODO(Step 5): вернуть 5 и добавить экран восстановления энергии (реклама/покупка).
-const MAX_ENERGY_PER_DAY: int = 25  # базовое дневное ограничение (ТЗ: 5)
-const TEST_START_ENERGY: int = 25    # стартовая энергия при первом запуске/новом дне
+# ⚠️ ВРЕМЕННО (тесты прототипа): энергия всегда не меньше 50, лимит не действует.
+# TODO(Step 5): вернуть MAX_ENERGY_PER_DAY = 5 и включить clampi в сеттере.
+const MAX_ENERGY_PER_DAY: int = 50   # базовое дневное ограничение (ТЗ: 5)
+const TEST_START_ENERGY: int = 50    # стартовая энергия при первом запуске/новом дне
+const MIN_TEST_ENERGY: int = 50      # ⚠️ ВРЕМЕННО: нижняя граница энергии для тестов (TODO Step 5: удалить)
 
 var _loading := false
 
@@ -24,9 +27,13 @@ var coins: int = START_COINS:
 		if not _loading:
 			SaveManager.request_save()
 
-var energy_current: int = MAX_ENERGY_PER_DAY:
+var energy_current: int = TEST_START_ENERGY:
 	set(value):
-		energy_current = clampi(value, 0, MAX_ENERGY_PER_DAY)
+		# ⚠️ ВРЕМЕННО: clampi отключён, энергия всегда не меньше 50 (тесты прототипа).
+		# TODO(Step 5): вернуть: energy_current = clampi(value, 0, MAX_ENERGY_PER_DAY)
+		energy_current = maxi(0, value)
+		if energy_current < MIN_TEST_ENERGY:
+			energy_current = MIN_TEST_ENERGY
 		energy_changed.emit(energy_current, MAX_ENERGY_PER_DAY)
 		if not _loading:
 			SaveManager.request_save()
