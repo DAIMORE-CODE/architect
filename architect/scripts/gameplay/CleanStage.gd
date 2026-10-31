@@ -39,8 +39,10 @@ var _last_update_time: float = -100.0
 var _finished: bool = false
 var _last_erase_pos: Vector2 = Vector2.INF
 var _progress_timer: Timer
+var _dbg_erase_count: int = 0  # ВРЕМЕННО для диагностики (удалить после фикса)
 
 func _ready() -> void:
+	print("[DEBUG] CleanStage: _ready(), инициализация слоя грязи")
 	btn_back.pressed.connect(_on_back_pressed)
 	_init_dirt_layer()
 	progress_bar.value = 0.0
@@ -78,6 +80,7 @@ func _init_dirt_layer() -> void:
 	# но не на импортированной CompressedTexture2D.
 	dirt_texture = ImageTexture.create_from_image(dirt_image)
 	dirt_texture_rect.texture = dirt_texture
+	print("[DEBUG] CleanStage: слой грязи готов, total_pixels=%d, размер=%dx%d" % [total_pixels, dirt_image.get_width(), dirt_image.get_height()])
 
 func _process(_delta: float) -> void:
 	# Батчим обновление GPU-текстуры: максимум ~30 Гц.
@@ -91,7 +94,8 @@ func _process(_delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if _finished:
 		return
-	# Мышь (ПК): press/release; motion — свайп курсором (в т.ч. без удержания ЛКМ).
+	print("[DEBUG] CleanStage._input: %s" % event.as_text())
+	# Мышь (ПК): press/release; motion — свайп курсором С УДЕРЖАНИЕМ ЛКМ.
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		is_erasing = event.pressed
 		_last_erase_pos = Vector2.INF
@@ -99,7 +103,9 @@ func _input(event: InputEvent) -> void:
 			_try_erase(event.global_position)
 		return
 	if event is InputEventMouseMotion:
-		_try_erase(event.global_position)
+		# Без удержания ЛКМ курсор не должен стирать (иначе грязь пропадает «сама»).
+		if is_erasing:
+			_try_erase(event.global_position)
 		return
 	# Тач (мобильные): касание + драги.
 	if event is InputEventScreenTouch:
@@ -112,7 +118,13 @@ func _input(event: InputEvent) -> void:
 		_try_erase(event.position)
 
 func _try_erase(global_pos: Vector2) -> void:
-	var local_pos: Vector2 = dirt_texture_rect.get_global_transform_with_canvas().affine_inverse() * global_pos
+	# КРИТИЧЕСКИЙ ФИКС: get_global_transform_with_canvas() возвращает тождественную
+	# матрицу для узлов внутри MarginContainer (он не задаёт canvas-трансform),
+	# поэтому координаты НЕ конвертировались и стирание попадало мимо.
+	# Правильный способ: local = get_global_mouse_position() - rect.global_position
+	# (работает при любом stretch-режиме на web/мобилках).
+	var canvas_rect: Rect2 = dirt_texture_rect.get_global_rect()
+	var local_pos: Vector2 = global_pos - canvas_rect.position
 	if not Rect2(Vector2.ZERO, dirt_texture_rect.size).has_point(local_pos):
 		return
 	# Интерполяция между предыдущей и текущей точкой — непрерывный след
@@ -147,6 +159,9 @@ func _erase_circle(center: Vector2) -> void:
 				erased_any = true
 	if erased_any:
 		_tex_dirty = true
+		_dbg_erase_count += 1
+		if _dbg_erase_count % 20 == 1:
+			print("[DEBUG] CleanStage: стирание #%d в local=%s" % [_dbg_erase_count, str(center)])
 
 func _recount_progress() -> void:
 	if _finished or dirt_image == null:
@@ -158,6 +173,7 @@ func _recount_progress() -> void:
 				clean_pixels += 1
 	var progress: float = clampf(float(clean_pixels) / float(total_pixels), 0.0, 1.0)
 	progress_bar.value = progress
+	print("[DEBUG] CleanStage: прогресс %.1f%% (clean=%d/%d)" % [progress * 100.0, clean_pixels, total_pixels])
 	if progress >= COMPLETE_THRESHOLD:
 		_finish_stage(progress)
 
