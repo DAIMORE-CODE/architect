@@ -73,22 +73,15 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = 64.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 1
 
 [node name="ItemClean" type="TextureRect" parent="WorkMargin/WorkArea"]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -210.0
-offset_top = -280.0
-offset_right = 210.0
-offset_bottom = 280.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
@@ -96,20 +89,6 @@ texture = ExtResource("2_watch")
 expand_mode = 1
 stretch_mode = 4
 
-[node name="DirtLayer" type="TextureRect" parent="WorkMargin/WorkArea"]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -210.0
-offset_top = -280.0
-offset_right = 210.0
-offset_bottom = 280.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
+[node name="DirtLayer" type="Sprite2D" parent="WorkMargin/WorkArea"]
+centered = false
 texture = ExtResource("3_dirt")
-expand_mode = 1
-stretch_mode = 4
