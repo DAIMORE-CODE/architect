@@ -20,15 +20,15 @@ func _initialize() -> void:
 	var finished_seen := [false]
 	stage.stage_finished.connect(func(_p: float) -> void: finished_seen[0] = true)
 	var guard := 0
-	var w: float = maxf(work_area.get_global_rect().size.x - 60.0, 10.0)
-	var h: float = maxf(work_area.get_global_rect().size.y - 60.0, 10.0)
-	while not stage._finished and guard < 400:
+	while not stage._finished and guard < 120:
 		guard += 1
+		var gx: float = fmod(guard * 37.0, 9.0) / 8.0
+		var gy: float = floorf(guard / 9.0) / 12.0
 		var mm2 := InputEventMouseMotion.new()
-		mm2.global_position = work_area.get_global_position() + Vector2(30.0 + fmod(guard * 7.0, w), 30.0 + fmod(guard * 13.0, h))
+		mm2.global_position = work_area.get_global_position() + work_area.size * Vector2(0.05 + gx * 0.9, 0.05 + gy * 0.9)
 		mm2.button_mask = MOUSE_BUTTON_MASK_LEFT
 		stage._input(mm2)
-		if guard % 10 == 0:
+		if guard % 6 == 0:
 			await process_frame
 	for i in 5:
 		await process_frame
