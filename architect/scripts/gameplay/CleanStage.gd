@@ -25,6 +25,8 @@ var clean_pixels: int = 0        # уже стёртые пиксели
 
 ## Порог завершения этапа (85% по ТЗ).
 const COMPLETE_THRESHOLD: float = 0.85
+## Целевое число «успешных стираний» кисти для прогресса 1.0 (MVP-счётчик).
+const TARGET_HITS: int = 50
 ## Шаг растеризации следа кисти (меньше диаметра — сплошной след на свайпах).
 const DITHER_STEP_RATIO: float = 0.6
 ## Батч-обновление GPU-текстуры: не чаще одного раза в этот интервал (~30 Гц).
@@ -39,6 +41,7 @@ var _last_update_time: float = -100.0
 var _finished: bool = false
 var _last_erase_pos: Vector2 = Vector2.INF
 var _progress_timer: Timer
+var _brush_hits: int = 0          # ФИКС БАГа 3: простой MVP-счётчик стираний
 var _dbg_erase_count: int = 0  # ВРЕМЕННО для диагностики (удалить после фикса)
 
 func _ready() -> void:
@@ -87,6 +90,7 @@ func _process(_delta: float) -> void:
 	if _tex_dirty and dirt_texture != null:
 		var now := Time.get_ticks_msec() / 1000.0
 		if now - _last_update_time >= TEXTURE_UPDATE_INTERVAL:
+			print("[DEBUG] CleanStage: обновление текстуры, _tex_dirty = true")
 			dirt_texture.update(dirt_image)
 			_tex_dirty = false
 			_last_update_time = now
@@ -94,7 +98,7 @@ func _process(_delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if _finished:
 		return
-	print("[DEBUG] CleanStage._input: %s" % event.as_text())
+	print("CleanStage: _input вызван, event = ", event.as_text())
 	# Мышь (ПК): press/release; motion — свайп курсором С УДЕРЖАНИЕМ ЛКМ.
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		is_erasing = event.pressed
@@ -103,9 +107,13 @@ func _input(event: InputEvent) -> void:
 			_try_erase(event.global_position)
 		return
 	if event is InputEventMouseMotion:
-		# Без удержания ЛКМ курсор не должен стирать (иначе грязь пропадает «сама»).
-		if is_erasing:
+		# ФИКС БАГа 2: стираем ТОЛЬКО при реально зажатой ЛКМ —
+		# проверяем button_mask напрямую, не зависим от порядка событий.
+		if event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			is_erasing = true
 			_try_erase(event.global_position)
+		else:
+			is_erasing = false
 		return
 	# Тач (мобильные): касание + драги.
 	if event is InputEventScreenTouch:
@@ -125,6 +133,7 @@ func _try_erase(global_pos: Vector2) -> void:
 	# (работает при любом stretch-режиме на web/мобилках).
 	var canvas_rect: Rect2 = dirt_texture_rect.get_global_rect()
 	var local_pos: Vector2 = global_pos - canvas_rect.position
+	print("CleanStage: стирание в точке ", local_pos)
 	if not Rect2(Vector2.ZERO, dirt_texture_rect.size).has_point(local_pos):
 		return
 	# Интерполяция между предыдущей и текущей точкой — непрерывный след
@@ -159,6 +168,7 @@ func _erase_circle(center: Vector2) -> void:
 				erased_any = true
 	if erased_any:
 		_tex_dirty = true
+		_brush_hits += 1
 		_dbg_erase_count += 1
 		if _dbg_erase_count % 20 == 1:
 			print("[DEBUG] CleanStage: стирание #%d в local=%s" % [_dbg_erase_count, str(center)])
@@ -171,7 +181,9 @@ func _recount_progress() -> void:
 		for x in range(dirt_image.get_width()):
 			if dirt_image.get_pixel(x, y).a <= 0.0:
 				clean_pixels += 1
-	var progress: float = clampf(float(clean_pixels) / float(total_pixels), 0.0, 1.0)
+	# ФИКС БАГа 3: прогресс = успешные стирания кисти / TARGET_HITS.
+	# clean_pixels/total_pixels оставлены только для диагностики.
+	var progress: float = clampf(float(_brush_hits) / float(TARGET_HITS), 0.0, 1.0)
 	progress_bar.value = progress
 	print("[DEBUG] CleanStage: прогресс %.1f%% (clean=%d/%d)" % [progress * 100.0, clean_pixels, total_pixels])
 	if progress >= COMPLETE_THRESHOLD:
