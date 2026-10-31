@@ -9,7 +9,11 @@ signal collection_changed(item_id: String)
 signal data_loaded
 
 const START_COINS: int = 100
-const MAX_ENERGY_PER_DAY: int = 5  # 5 бесплатных реставраций в день (ТЗ, удержание)
+
+# ВРЕМЕННО (для тестирования прототипа): увеличено на несколько реставраций сразу.
+# TODO(Step 5): вернуть 5 и добавить экран восстановления энергии (реклама/покупка).
+const MAX_ENERGY_PER_DAY: int = 25  # базовое дневное ограничение (ТЗ: 5)
+const TEST_START_ENERGY: int = 25    # стартовая энергия при первом запуске/новом дне
 
 var _loading := false
 
@@ -70,7 +74,8 @@ func add_energy(amount: int = 1) -> void:
 	energy_current += amount
 
 func reset_energy() -> void:
-	energy_current = MAX_ENERGY_PER_DAY
+	# ВРЕМЕННО: стартовая энергия повышена для тестирования (см. TODO выше).
+	energy_current = TEST_START_ENERGY
 
 # --- Музей ------------------------------------------------------------------
 
@@ -128,7 +133,7 @@ func to_dict() -> Dictionary:
 func from_dict(data: Dictionary) -> void:
 	_loading = true
 	coins = int(data.get("coins", START_COINS))
-	energy_current = int(data.get("energy_current", MAX_ENERGY_PER_DAY))
+	energy_current = int(data.get("energy_current", TEST_START_ENERGY))
 	if typeof(data.get("museum_items", {})) == TYPE_DICTIONARY:
 		museum_items = data["museum_items"]
 	if typeof(data.get("upgrades", {})) == TYPE_DICTIONARY:
