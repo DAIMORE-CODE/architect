@@ -39,9 +39,10 @@ func _ready() -> void:
 		btn_back.pressed.connect(_on_back_pressed)
 	progress_bar.max_value = 1.0
 	progress_bar.value = 0.0
-	# WorkArea перехватывает мышь (STOP) — иначе TextureRect(DirtLayer) с
-	# (mouse_filter=STOP забирает события и глобальный _input() не вызывается).
-	work_area.mouse_filter = Control.MOUSE_FILTER_STOP
+	# WorkArea пропускает мышь дальше (PASS), а DirtLayer/ItemClean стоят на STOP.
+	# Ввод обрабатывается глобальным _input() этого скрипта; guard по границам
+	# рабочей области (_is_inside_work_area) отсекает свайпы по фону/TopBar.
+	work_area.mouse_filter = Control.MOUSE_FILTER_PASS
 	# Создаём СОБСТВЕННУЮ ImageTexture: update() нельзя вызывать на
 	# импортированной CompressedTexture2D (иначе рантайм-ошибка).
 	var original_image: Image = dirt_rect.texture.get_image()
