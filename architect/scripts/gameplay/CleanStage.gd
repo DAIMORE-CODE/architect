@@ -1,14 +1,16 @@
 extends Control
 ## CleanStage — мини-игра «Очистка» (Шаг 3, ядро MVP).
 ## Игрок водит пальцем/мышью по слою грязи и «стирает» её.
-## Исправления ревью Шага 3:
-##  1) КРИТИЧНО: собственная ImageTexture через ImageTexture.create_from_image()
-##     + работа с дубликатом Image. Вызов texture.update() на импортированной
-##     CompressedTexture2D приводил к ошибке рантайма и зависанию прогресса.
-##  2) Обновление текстуры батчем в _process, не чаще 30 Гц (_tex_dirty + троттлинг).
-##  3) Обработка InputEventMouseMotion — свайпы мышью тоже стирают.
-##  4) Честный подсчёт стёртых пикселей: прогресс = очищенная площадь / площадь
-##     грязи, пересчёт раз в 0.5 с через Timer (не каждый кадр).
+## ФИНАЛЬНАЯ РЕАЛИЗАЦИЯ (по вердикту ревью + тесту пользователя):
+##  1) Собственная ImageTexture через create_from_image() — update() НЕ вызывается
+##     на импортированной CompressedTexture2D (иначе рантайм-ошибка и зависание).
+##  2) Стирание ТОЛЬКО при зажатой ЛКМ (button_mask & MOUSE_BUTTON_MASK_LEFT)
+##     или при активном тач-касании. Мышь без клика не стирает.
+##  3) Прогресс — простой MVP-счётчик: _brush_hits / TARGET_HITS (без попиксельных
+##     вычислений, которые давали clean > total и мгновенные 100%).
+##  4) Обновление текстуры батчем в _process() по флагу _tex_dirty.
+##  5) Координаты: dirt_texture_rect.to_local(event.global_position) — корректно
+##     работает при stretch mode = canvas_items.
 
 signal stage_finished(progress: float)
 
@@ -17,187 +19,148 @@ signal stage_finished(progress: float)
 @onready var btn_back: Button = $TopBar/BtnBack
 
 var dirt_image: Image            # рабочий дубликат изображения грязи
-var dirt_texture: ImageTexture   # собственная текстура для DirtLayer
-var is_erasing: bool = false
 var brush_size: float = 40.0
-var total_pixels: int = 0        # пиксели грязи при старте (знаменатель прогресса)
-var clean_pixels: int = 0        # уже стёртые пиксели
+var total_pixels: int = 0        # диагностика: пиксели грязи при старте
+var clean_pixels: int = 0        # диагностика: стёртые пиксели
 
 ## Порог завершения этапа (85% по ТЗ).
 const COMPLETE_THRESHOLD: float = 0.85
-## Целевое число «успешных стираний» кисти для прогресса 1.0 (MVP-счётчик).
+## Целевое число успешных движений кисти для прогресса 1.0 (MVP-счётчик).
 const TARGET_HITS: int = 50
-## Шаг растеризации следа кисти (меньше диаметра — сплошной след на свайпах).
-const DITHER_STEP_RATIO: float = 0.6
-## Батч-обновление GPU-текстуры: не чаще одного раза в этот интервал (~30 Гц).
-const TEXTURE_UPDATE_INTERVAL: float = 1.0 / 30.0
-## Интервал честного пересчёта прогресса (Timer), сек.
-const PROGRESS_RECOUNT_INTERVAL: float = 0.5
 ## Прозрачный цвет для стирания альфа-канала.
 const TRANSPARENT := Color(0, 0, 0, 0)
 
 var _tex_dirty := false
-var _last_update_time: float = -100.0
-var _finished: bool = false
-var _last_erase_pos: Vector2 = Vector2.INF
-var _progress_timer: Timer
-var _brush_hits: int = 0          # ФИКС БАГа 3: простой MVP-счётчик стираний
-var _dbg_erase_count: int = 0  # ВРЕМЕННО для диагностики (удалить после фикса)
+var _finished := false
+var _brush_hits := 0
+var _last_brush_pos := Vector2.INF
+var _touch_active := false
 
 func _ready() -> void:
 	print("[DEBUG] CleanStage: _ready(), инициализация слоя грязи")
 	btn_back.pressed.connect(_on_back_pressed)
-	_init_dirt_layer()
 	progress_bar.value = 0.0
-	# Пересчёт прогресса раз в 0.5 с — не убиваем FPS на мобильных.
-	_progress_timer = Timer.new()
-	_progress_timer.wait_time = PROGRESS_RECOUNT_INTERVAL
-	_progress_timer.one_shot = false
-	_progress_timer.autostart = true
-	_progress_timer.timeout.connect(_recount_progress)
-	add_child(_progress_timer)
-
-func _init_dirt_layer() -> void:
-	var source := dirt_texture_rect.texture
-	if source == null:
-		push_error("CleanStage: у DirtLayer отсутствует текстура")
-		return
-	# get_image() возвращает копию — исходный импорт не мутируется.
-	dirt_image = source.get_image()
-	if dirt_image == null:
+	progress_bar.max_value = 1.0
+	# Создаём СОБСТВЕННУЮ ImageTexture для модификации (БАГ 1).
+	var original_image: Image = dirt_texture_rect.texture.get_image()
+	if original_image == null:
 		push_error("CleanStage: не удалось получить Image из текстуры грязи")
 		return
-	if dirt_image.is_compressed():
-		dirt_image.decompress()
-	if dirt_image.get_format() != Image.FORMAT_RGBA8:
-		dirt_image.convert(Image.FORMAT_RGBA8)
+	if original_image.is_compressed():
+		original_image.decompress()
+	if original_image.get_format() != Image.FORMAT_RGBA8:
+		original_image.convert(Image.FORMAT_RGBA8)
+	var new_texture := ImageTexture.create_from_image(original_image)
+	dirt_texture_rect.texture = new_texture
+	dirt_image = original_image
 	total_pixels = 0
-	for y in range(dirt_image.get_height()):
-		for x in range(dirt_image.get_width()):
-			if dirt_image.get_pixel(x, y).a > 0.0:
+	for x in range(dirt_image.get_width()):
+		for y in range(dirt_image.get_height()):
+			if dirt_image.get_pixel(x, y).a > 0.1:
 				total_pixels += 1
-	if total_pixels <= 0:
-		push_error("CleanStage: слой грязи пуст — прогресс не рассчитывается")
-		total_pixels = 1
-	# Создаём СОБСТВЕННУЮ ImageTexture: update() допустим только на ней,
-	# но не на импортированной CompressedTexture2D.
-	dirt_texture = ImageTexture.create_from_image(dirt_image)
-	dirt_texture_rect.texture = dirt_texture
-	print("[DEBUG] CleanStage: слой грязи готов, total_pixels=%d, размер=%dx%d" % [total_pixels, dirt_image.get_width(), dirt_image.get_height()])
+	print("[DEBUG] CleanStage: слой грязи готов, total_pixels=", total_pixels)
 
 func _process(_delta: float) -> void:
-	# Батчим обновление GPU-текстуры: максимум ~30 Гц.
-	if _tex_dirty and dirt_texture != null:
-		var now := Time.get_ticks_msec() / 1000.0
-		if now - _last_update_time >= TEXTURE_UPDATE_INTERVAL:
-			print("[DEBUG] CleanStage: обновление текстуры, _tex_dirty = true")
-			dirt_texture.update(dirt_image)
-			_tex_dirty = false
-			_last_update_time = now
+	# Батчим обновление GPU-текстуры только когда есть изменения (БАГ 1 fix).
+	if _tex_dirty and dirt_image != null:
+		print("CleanStage: обновление текстуры, _tex_dirty = ", _tex_dirty)
+		dirt_texture_rect.texture.update(dirt_image)
+		_tex_dirty = false
+	# Прогресс: простой счётчик стираний (БАГ 3 fix).
+	var progress: float = clampf(float(_brush_hits) / float(TARGET_HITS), 0.0, 1.0)
+	progress_bar.value = progress
+	if progress >= COMPLETE_THRESHOLD and not _finished:
+		_finish_stage(progress)
 
 func _input(event: InputEvent) -> void:
 	if _finished:
 		return
 	print("CleanStage: _input вызван, event = ", event.as_text())
-	# Мышь (ПК): press/release; motion — свайп курсором С УДЕРЖАНИЕМ ЛКМ.
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		is_erasing = event.pressed
-		_last_erase_pos = Vector2.INF
-		if event.pressed:
-			_try_erase(event.global_position)
-		return
+	# Мышь: движение С ЗАЖАТОЙ ЛКМ (БАГ 2 fix).
 	if event is InputEventMouseMotion:
-		# ФИКС БАГа 2: стираем ТОЛЬКО при реально зажатой ЛКМ —
-		# проверяем button_mask напрямую, не зависим от порядка событий.
 		if event.button_mask & MOUSE_BUTTON_MASK_LEFT:
-			is_erasing = true
-			_try_erase(event.global_position)
-		else:
-			is_erasing = false
+			_apply_brush(event.global_position)
 		return
-	# Тач (мобильные): касание + драги.
-	if event is InputEventScreenTouch:
-		is_erasing = event.pressed
-		_last_erase_pos = Vector2.INF
+	# Клик мыши: начать/закончить стирание, сброс линии-интерполяции.
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		_last_brush_pos = Vector2.INF
 		if event.pressed:
-			_try_erase(event.position)
+			_apply_brush(event.global_position)
 		return
-	if event is InputEventScreenDrag:
-		_try_erase(event.position)
+	# Тач (мобильные/web): касание + драги.
+	if event is InputEventScreenTouch:
+		_touch_active = event.pressed
+		_last_brush_pos = Vector2.INF
+		if event.pressed:
+			_apply_brush(event.position)
+		return
+	if event is InputEventScreenDrag and _touch_active:
+		_apply_brush(event.position)
 
-func _try_erase(global_pos: Vector2) -> void:
-	# КРИТИЧЕСКИЙ ФИКС: get_global_transform_with_canvas() возвращает тождественную
-	# матрицу для узлов внутри MarginContainer (он не задаёт canvas-трансform),
-	# поэтому координаты НЕ конвертировались и стирание попадало мимо.
-	# Правильный способ: local = get_global_mouse_position() - rect.global_position
-	# (работает при любом stretch-режиме на web/мобилках).
-	var canvas_rect: Rect2 = dirt_texture_rect.get_global_rect()
-	var local_pos: Vector2 = global_pos - canvas_rect.position
+func _apply_brush(global_pos: Vector2) -> void:
+	# Конвертация глобальных координат в локальные DirtLayer (to_local учитывает
+	# трансформы предков и stretch canvas_items).
+	var local_pos: Vector2 = dirt_texture_rect.to_local(global_pos)
 	print("CleanStage: стирание в точке ", local_pos)
-	if not Rect2(Vector2.ZERO, dirt_texture_rect.size).has_point(local_pos):
+	if dirt_image == null:
 		return
-	# Интерполяция между предыдущей и текущей точкой — непрерывный след
-	# даже при быстрых свайпах (мышь и тач).
-	var dist: float = local_pos.distance_to(_last_erase_pos) if _last_erase_pos.x < INF * 0.5 else 0.0
-	var step: float = maxf(brush_size * DITHER_STEP_RATIO, 2.0)
-	if dist > step:
-		var steps := int(dist / step) + 1
-		for i in range(1, steps + 1):
-			_erase_circle(_last_erase_pos.lerp(local_pos, float(i) / float(steps)))
+	var img_w: int = dirt_image.get_width()
+	var img_h: int = dirt_image.get_height()
+	# TextureRect stretch_mode=KEEP_ASPECT_CENTERED может оставлять поля —
+	# проверяем попадание в границы узла, а затем клампим в границы изображения.
+	if local_pos.x < 0.0 or local_pos.y < 0.0 or local_pos.x >= float(img_w) or local_pos.y >= float(img_h):
+		return
+	# Интерполяция между точками свайпа — непрерывный след без «дырок».
+	var center := Vector2i(int(local_pos.x), int(local_pos.y))
+	if _last_brush_pos != Vector2.INF:
+		_draw_line_bresenham(Vector2i(int(_last_brush_pos.x), int(_last_brush_pos.y)), center)
 	else:
-		_erase_circle(local_pos)
-	_last_erase_pos = local_pos
+		_draw_circle(center)
+	_last_brush_pos = local_pos
+	_brush_hits += 1
+	_tex_dirty = true
 
-func _erase_circle(center: Vector2) -> void:
-	var cx: int = int(center.x)
-	var cy: int = int(center.y)
-	var r: int = int(brush_size)
-	var r_sq: int = r * r
-	# Ограничиваем цикл границами изображения — set_pixel вне границ недопустим.
-	var x0: int = maxi(cx - r, 0)
-	var x1: int = mini(cx + r, dirt_image.get_width() - 1)
-	var y0: int = maxi(cy - r, 0)
-	var y1: int = mini(cy + r, dirt_image.get_height() - 1)
-	var erased_any := false
-	for y in range(y0, y1 + 1):
-		var dy: int = y - cy
-		for x in range(x0, x1 + 1):
-			var dx: int = x - cx
-			if dx * dx + dy * dy <= r_sq and dirt_image.get_pixel(x, y).a > 0.0:
-				dirt_image.set_pixel(x, y, TRANSPARENT)
-				erased_any = true
-	if erased_any:
-		_tex_dirty = true
-		_brush_hits += 1
-		_dbg_erase_count += 1
-		if _dbg_erase_count % 20 == 1:
-			print("[DEBUG] CleanStage: стирание #%d в local=%s" % [_dbg_erase_count, str(center)])
+func _draw_line_bresenham(start: Vector2i, end: Vector2i) -> void:
+	var x0 := start.x
+	var y0 := start.y
+	var x1 := end.x
+	var y1 := end.y
+	var dx := absi(x1 - x0)
+	var dy := absi(y1 - y0)
+	var sx := 1 if x0 < x1 else -1
+	var sy := 1 if y0 < y1 else -1
+	var err := dx - dy
+	while true:
+		_draw_circle(Vector2i(x0, y0))
+		if x0 == x1 and y0 == y1:
+			break
+		var e2 := 2 * err
+		if e2 > -dy:
+			err -= dy
+			x0 += sx
+		if e2 < dx:
+			err += dx
+			y0 += sy
 
-func _recount_progress() -> void:
-	if _finished or dirt_image == null:
-		return
-	clean_pixels = 0
-	for y in range(dirt_image.get_height()):
-		for x in range(dirt_image.get_width()):
-			if dirt_image.get_pixel(x, y).a <= 0.0:
-				clean_pixels += 1
-	# ФИКС БАГа 3: прогресс = успешные стирания кисти / TARGET_HITS.
-	# clean_pixels/total_pixels оставлены только для диагностики.
-	var progress: float = clampf(float(_brush_hits) / float(TARGET_HITS), 0.0, 1.0)
-	progress_bar.value = progress
-	print("[DEBUG] CleanStage: прогресс %.1f%% (clean=%d/%d)" % [progress * 100.0, clean_pixels, total_pixels])
-	if progress >= COMPLETE_THRESHOLD:
-		_finish_stage(progress)
+func _draw_circle(center: Vector2i) -> void:
+	var r := int(brush_size)
+	var img_w := dirt_image.get_width()
+	var img_h := dirt_image.get_height()
+	for x in range(-r, r + 1):
+		for y in range(-r, r + 1):
+			if x * x + y * y <= r * r:
+				var px := center.x + x
+				var py := center.y + y
+				if px >= 0 and px < img_w and py >= 0 and py < img_h:
+					if dirt_image.get_pixel(px, py).a > 0.0:
+						dirt_image.set_pixel(px, py, TRANSPARENT)
+						clean_pixels += 1
 
 func _finish_stage(progress: float) -> void:
 	_finished = true
-	is_erasing = false
 	set_process_input(false)
-	_progress_timer.stop()
 	print("[STUB] Очистка завершена на 85%+. Переход к следующему этапу")
 	stage_finished.emit(progress)
 
 func _on_back_pressed() -> void:
-	# Возврат в Hub через перезагрузку корневой сцены (роутер Main.tscn).
-	# Роутер уничтожает экраны перед показом новых — утечек нет.
 	get_tree().reload_current_scene()

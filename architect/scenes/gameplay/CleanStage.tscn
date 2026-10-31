@@ -94,7 +94,7 @@ grow_vertical = 2
 mouse_filter = 2
 texture = ExtResource("2_watch")
 expand_mode = 1
-stretch_mode = 5
+stretch_mode = 4
 
 [node name="DirtLayer" type="TextureRect" parent="WorkMargin/WorkArea"]
 layout_mode = 1
@@ -112,4 +112,4 @@ grow_vertical = 2
 mouse_filter = 2
 texture = ExtResource("3_dirt")
 expand_mode = 1
-stretch_mode = 5
+stretch_mode = 4
