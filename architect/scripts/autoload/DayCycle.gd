@@ -7,6 +7,8 @@ signal new_day(day_index: int)              # наступил новый ден
 signal daily_reward_state_changed           # можно/нельзя забрать награду сегодня
 
 const DAILY_CYCLE_LENGTH := 7
+const REWARD_COINS: Array[int] = [50, 50, 75, 75, 100, 100, 200]
+const SEVENTH_DAY_CONSUMABLE: String = "polish"
 
 var last_visit_date: String = ""            # последний визит (дата строкой)
 var first_play_date: String = ""            # дата первого запуска (для day_index)
@@ -20,11 +22,10 @@ func _check_new_day_on_start() -> void:
 	var today := _today()
 	if first_play_date.is_empty():
 		first_play_date = today
+	_reset_streak_if_missed()
 	if last_visit_date == today:
 		return
 	var is_first_install := last_visit_date.is_empty()
-	if not is_first_install and last_visit_date != _yesterday_of(today):
-		daily_streak = 0
 	last_visit_date = today
 	if not is_first_install:
 		new_day.emit(get_day_index())
@@ -41,15 +42,26 @@ func claim_daily_reward() -> bool:
 	## Возвращает true, если награда реально выдана. Вызывать из DailyRewardScreen.
 	if not is_daily_reward_available():
 		return false
+	var index := clampi(daily_streak, 0, DAILY_CYCLE_LENGTH - 1)
+	GameData.add_coins(REWARD_COINS[index])
+	if index == DAILY_CYCLE_LENGTH - 1:
+		GameData.add_consumable(SEVENTH_DAY_CONSUMABLE)
 	reward_claimed_date = _today()
-	daily_streak = (daily_streak + 1) % DAILY_CYCLE_LENGTH
+	daily_streak = (index + 1) % DAILY_CYCLE_LENGTH
 	daily_reward_state_changed.emit()
 	SaveManager.request_save()
 	return true
 
+func get_today_index() -> int:
+	## Индекс дня цикла (0..6), который показывается как «сегодня».
+	## После получения награды это уже выданный день, а не следующий.
+	if reward_claimed_date == _today():
+		return (daily_streak - 1 + DAILY_CYCLE_LENGTH) % DAILY_CYCLE_LENGTH
+	return daily_streak
+
 func get_current_cycle_day() -> int:
-	## День в 7-дневном цикле (1..7), на который игрок получит награду сейчас.
-	return clampi(daily_streak + 1, 1, DAILY_CYCLE_LENGTH)
+	## День в 7-дневном цикле (1..7) для текущего состояния.
+	return get_today_index() + 1
 
 # --- Сериализация -------------------------------------------------------------
 
@@ -66,13 +78,20 @@ func from_dict(data: Dictionary) -> void:
 	last_visit_date = str(data.get("last_visit_date", ""))
 	daily_streak = int(data.get("daily_streak", 0))
 	reward_claimed_date = str(data.get("reward_claimed_date", ""))
+	_reset_streak_if_missed()
 	# После загрузки перепроверяем: возможно игрок пришёл на следующий день.
 	_check_new_day_on_start()
 
 # --- Внутреннее -----------------------------------------------------------------
 
+func _reset_streak_if_missed() -> void:
+	## Пропуск дня: награда не забрана ни сегодня, ни вчера — цикл начинается заново.
+	var today := _today()
+	if reward_claimed_date != today and reward_claimed_date != _yesterday_of(today):
+		daily_streak = 0
+
 func _today() -> String:
-	return Time.get_date_string_from_system()
+	return Time.get_date_string_from_system(true)
 
 func _yesterday_of(date_string: String) -> String:
 	var d := Time.get_datetime_dict_from_unix_time(_date_to_unix(date_string) - 86400)

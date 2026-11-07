@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cw7qdirty9z3m"
-path="res://.godot/imported/watch_dirt.png-b3e1f9a7c2d54e8f0a6b3d1c9e7f5a28.ctex"
+uid="uid://cw7qdirt0a03m"
+path="res://.godot/imported/watch_dirt.png-a0e4c08a02dbaab9ba13816c46419a0c.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/items/watch_dirt.png"
-dest_files=["res://.godot/imported/watch_dirt.png-b3e1f9a7c2d54e8f0a6b3d1c9e7f5a28.ctex"]
+dest_files=["res://.godot/imported/watch_dirt.png-a0e4c08a02dbaab9ba13816c46419a0c.ctex"]
 
 [params]
 

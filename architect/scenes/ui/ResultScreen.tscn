@@ -1,0 +1,107 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/ResultScreen.gd" id="1_result"]
+
+[node name="ResultScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_result")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.11, 0.09, 0.08, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="CenterBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+size_flags_vertical = 4
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="Margin/CenterBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Реставрация завершена"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ItemPreview" type="TextureRect" parent="Margin/CenterBox"]
+custom_minimum_size = Vector2(200, 200)
+layout_mode = 2
+size_flags_horizontal = 4
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Stars" type="Label" parent="Margin/CenterBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 56
+text = "★★★"
+horizontal_alignment = 1
+
+[node name="Summary" type="Label" parent="Margin/CenterBox"]
+layout_mode = 2
+text = "Очистка: 0% · Сборка: 0% · Полировка: 0%"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Reward" type="Label" parent="Margin/CenterBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Награда: 0 монет"
+horizontal_alignment = 1
+
+[node name="Buttons" type="HBoxContainer" parent="Margin/CenterBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="BtnSell" type="Button" parent="Margin/CenterBox/Buttons"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Продать"
+
+[node name="BtnMuseum" type="Button" parent="Margin/CenterBox/Buttons"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "В музей"
+
+[node name="BtnDouble" type="Button" parent="Margin/CenterBox/Buttons"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Удвоить монеты"
+
+[node name="BtnHub" type="Button" parent="Margin/CenterBox/Buttons"]
+visible = false
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "В Hub"
+
+[node name="Status" type="Label" parent="Margin/CenterBox"]
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 3

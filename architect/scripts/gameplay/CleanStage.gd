@@ -11,6 +11,7 @@ extends Control
 ##     грязи, пересчёт раз в 0.5 с через Timer (не каждый кадр).
 
 signal stage_finished(progress: float)
+signal back_requested
 
 @onready var dirt_texture_rect: TextureRect = $WorkMargin/WorkArea/DirtLayer
 @onready var progress_bar: ProgressBar = $TopBar/Progress
@@ -21,10 +22,10 @@ var dirt_texture: ImageTexture   # собственная текстура дл�
 var is_erasing: bool = false
 var brush_size: float = 40.0
 var total_pixels: int = 0        # пиксели грязи при старте (знаменатель прогресса)
-var clean_pixels: int = 0        # уже стёртые пиксели
+var dirt_left: int = 0           # оставшиеся пиксели грязи (уменьшается при стирании)
 
-## Порог завершения этапа (85% по ТЗ).
-const COMPLETE_THRESHOLD: float = 0.85
+## Порог завершения этапа (95% по D-013).
+const COMPLETE_THRESHOLD: float = 0.95
 ## Шаг растеризации следа кисти (меньше диаметра — сплошной след на свайпах).
 const DITHER_STEP_RATIO: float = 0.6
 ## Батч-обновление GPU-текстуры: не чаще одного раза в этот интервал (~30 Гц).
@@ -33,17 +34,44 @@ const TEXTURE_UPDATE_INTERVAL: float = 1.0 / 30.0
 const PROGRESS_RECOUNT_INTERVAL: float = 0.5
 ## Прозрачный цвет для стирания альфа-канала.
 const TRANSPARENT := Color(0, 0, 0, 0)
+## Частицы стирания: не чаще одного всплеска в этот интервал, сек.
+const BURST_INTERVAL: float = 0.08
+const BURST_COLOR := Color(0.45, 0.35, 0.25)
+const SFX := preload("res://scripts/fx/SfxGenerator.gd")
+const FX := preload("res://scripts/fx/ClearParticles.gd")
+## Звук скрэба: не чаще одного проигрывания в этот интервал, сек.
+const SCRAPE_INTERVAL: float = 0.12
+## Грязный слой строится из арта предмета: по большой стороне не больше этого размера.
+const DIRT_MAX_SIDE: int = 256
+const GRIME_COLOR := Color(0.32, 0.24, 0.16)
+const GRIME_MIX: float = 0.7
+const GRIME_NOISE: float = 0.05
 
+## Арт текущего предмета сессии, задаётся Main до добавления сцены в дерево.
+var item_texture: Texture2D
+
+const EASY_CLEAR_CHANCE: float = 0.2
+var easy_mode: bool = false
 var _tex_dirty := false
 var _last_update_time: float = -100.0
 var _finished: bool = false
-var _last_erase_pos: Vector2 = Vector2.INF
+var _last_erase_pos: Vector2 = Vector2.INF  # в пикселях изображения
 var _progress_timer: Timer
-var _dbg_erase_count: int = 0  # ВРЕМЕННО для диагностики (удалить после фикса)
+var _last_burst_time: float = -100.0
+var _last_scrape_time: float = -100.0
+var _erased_this_frame: bool = false
+var _scrape_player: AudioStreamPlayer
+var _sfx_player: AudioStreamPlayer
 
 func _ready() -> void:
-	print("[DEBUG] CleanStage: _ready(), инициализация слоя грязи")
 	btn_back.pressed.connect(_on_back_pressed)
+	_scrape_player = AudioStreamPlayer.new()
+	_scrape_player.stream = SFX.get_stream("scrape")
+	_scrape_player.bus = SFX.BUS_NAME
+	add_child(_scrape_player)
+	_sfx_player = AudioStreamPlayer.new()
+	_sfx_player.bus = SFX.BUS_NAME
+	add_child(_sfx_player)
 	_init_dirt_layer()
 	progress_bar.value = 0.0
 	# Пересчёт прогресса раз в 0.5 с — не убиваем FPS на мобильных.
@@ -55,34 +83,72 @@ func _ready() -> void:
 	add_child(_progress_timer)
 
 func _init_dirt_layer() -> void:
-	var source := dirt_texture_rect.texture
-	if source == null:
-		push_error("CleanStage: у DirtLayer отсутствует текстура")
-		return
-	# get_image() возвращает копию — исходный импорт не мутируется.
-	dirt_image = source.get_image()
+	if item_texture != null:
+		($WorkMargin/WorkArea/ItemClean as TextureRect).texture = item_texture
+		dirt_image = _make_dirt_from_item(item_texture)
+	else:
+		var source := dirt_texture_rect.texture
+		if source == null:
+			push_error("CleanStage: у DirtLayer отсутствует текстура")
+			return
+		# get_image() возвращает копию — исходный импорт не мутируется.
+		dirt_image = _to_rgba(source.get_image())
+		total_pixels = 0
+		for y in range(dirt_image.get_height()):
+			for x in range(dirt_image.get_width()):
+				if dirt_image.get_pixel(x, y).a > 0.0:
+					total_pixels += 1
 	if dirt_image == null:
 		push_error("CleanStage: не удалось получить Image из текстуры грязи")
 		return
-	if dirt_image.is_compressed():
-		dirt_image.decompress()
-	if dirt_image.get_format() != Image.FORMAT_RGBA8:
-		dirt_image.convert(Image.FORMAT_RGBA8)
-	total_pixels = 0
-	for y in range(dirt_image.get_height()):
-		for x in range(dirt_image.get_width()):
-			if dirt_image.get_pixel(x, y).a > 0.0:
-				total_pixels += 1
 	if total_pixels <= 0:
 		push_error("CleanStage: слой грязи пуст — прогресс не рассчитывается")
 		total_pixels = 1
+	dirt_left = total_pixels
 	# Создаём СОБСТВЕННУЮ ImageTexture: update() допустим только на ней,
 	# но не на импортированной CompressedTexture2D.
 	dirt_texture = ImageTexture.create_from_image(dirt_image)
 	dirt_texture_rect.texture = dirt_texture
-	print("[DEBUG] CleanStage: слой грязи готов, total_pixels=%d, размер=%dx%d" % [total_pixels, dirt_image.get_width(), dirt_image.get_height()])
+
+func _to_rgba(img: Image) -> Image:
+	if img == null:
+		return null
+	if img.is_compressed():
+		img.decompress()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	return img
+
+## Грязь = арт предмета (фон уже вырезан в ItemArt), подкрашенный в цвет налёта с шумом.
+## Подсчёт непрозрачных пикселей идёт в том же проходе, что и подкраска.
+func _make_dirt_from_item(tex: Texture2D) -> Image:
+	var img := _to_rgba(tex.get_image())
+	if img == null:
+		return null
+	var longest := maxi(img.get_width(), img.get_height())
+	if longest > DIRT_MAX_SIDE:
+		var k := float(DIRT_MAX_SIDE) / float(longest)
+		img.resize(roundi(img.get_width() * k), roundi(img.get_height() * k), Image.INTERPOLATE_BILINEAR)
+	total_pixels = 0
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			var c := img.get_pixel(x, y)
+			if c.a <= 0.0:
+				continue
+			if easy_mode and randf() < EASY_CLEAR_CHANCE:
+				img.set_pixel(x, y, Color(c.r, c.g, c.b, 0.0))
+				continue
+			total_pixels += 1
+			var n := randf_range(-GRIME_NOISE, GRIME_NOISE)
+			var grime := Color(GRIME_COLOR.r + n, GRIME_COLOR.g + n, GRIME_COLOR.b + n, 1.0)
+			var rgb := c.lerp(grime, GRIME_MIX)
+			img.set_pixel(x, y, Color(rgb.r, rgb.g, rgb.b, c.a))
+	return img
 
 func _process(_delta: float) -> void:
+	if _erased_this_frame:
+		_erased_this_frame = false
+		_try_play_scrape()
 	# Батчим обновление GPU-текстуры: максимум ~30 Гц.
 	if _tex_dirty and dirt_texture != null:
 		var now := Time.get_ticks_msec() / 1000.0
@@ -94,55 +160,57 @@ func _process(_delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if _finished:
 		return
-	print("[DEBUG] CleanStage._input: %s" % event.as_text())
 	# Мышь (ПК): press/release; motion — свайп курсором С УДЕРЖАНИЕМ ЛКМ.
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		is_erasing = event.pressed
 		_last_erase_pos = Vector2.INF
 		if event.pressed:
-			_try_erase(event.global_position)
+			_apply_brush(event.global_position)
 		return
 	if event is InputEventMouseMotion:
 		# Без удержания ЛКМ курсор не должен стирать (иначе грязь пропадает «сама»).
 		if is_erasing:
-			_try_erase(event.global_position)
+			_apply_brush(event.global_position)
 		return
 	# Тач (мобильные): касание + драги.
 	if event is InputEventScreenTouch:
 		is_erasing = event.pressed
 		_last_erase_pos = Vector2.INF
 		if event.pressed:
-			_try_erase(event.position)
+			_apply_brush(event.position)
 		return
 	if event is InputEventScreenDrag:
-		_try_erase(event.position)
+		_apply_brush(event.position)
 
-func _try_erase(global_pos: Vector2) -> void:
-	# КРИТИЧЕСКИЙ ФИКС: get_global_transform_with_canvas() возвращает тождественную
-	# матрицу для узлов внутри MarginContainer (он не задаёт canvas-трансform),
-	# поэтому координаты НЕ конвертировались и стирание попадало мимо.
-	# Правильный способ: local = get_global_mouse_position() - rect.global_position
-	# (работает при любом stretch-режиме на web/мобилках).
-	var canvas_rect: Rect2 = dirt_texture_rect.get_global_rect()
-	var local_pos: Vector2 = global_pos - canvas_rect.position
-	if not Rect2(Vector2.ZERO, dirt_texture_rect.size).has_point(local_pos):
+func _apply_brush(global_pos: Vector2) -> void:
+	if dirt_image == null or _finished:
 		return
-	# Интерполяция между предыдущей и текущей точкой — непрерывный след
-	# даже при быстрых свайпах (мышь и тач).
-	var dist: float = local_pos.distance_to(_last_erase_pos) if _last_erase_pos.x < INF * 0.5 else 0.0
-	var step: float = maxf(brush_size * DITHER_STEP_RATIO, 2.0)
+	# Локальные координаты относительно DirtLayer (TextureRect, stretch = Scale).
+	var local_pos: Vector2 = dirt_texture_rect.get_global_transform().affine_inverse() * global_pos
+	var rect_size: Vector2 = dirt_texture_rect.size
+	if local_pos.x < 0.0 or local_pos.y < 0.0 or local_pos.x > rect_size.x or local_pos.y > rect_size.y:
+		return
+	# Переводим координаты в пиксели изображения и размер кисти — тоже в пиксели.
+	var scale_x: float = float(dirt_image.get_width()) / rect_size.x
+	var scale_y: float = float(dirt_image.get_height()) / rect_size.y
+	var img_pos := Vector2(local_pos.x * scale_x, local_pos.y * scale_y)
+	var img_radius: float = brush_size * (scale_x + scale_y) * 0.5 * (1.25 if GameData.has_upgrade("soft_brush") else 1.0)
+	# Интерполяция между предыдущей и текущей точкой — непрерывный след на свайпах.
+	var has_last: bool = _last_erase_pos.is_finite()
+	var dist: float = img_pos.distance_to(_last_erase_pos) if has_last else 0.0
+	var step: float = maxf(img_radius * DITHER_STEP_RATIO, 2.0)
 	if dist > step:
-		var steps := int(dist / step) + 1
+		var steps: int = int(dist / step) + 1
 		for i in range(1, steps + 1):
-			_erase_circle(_last_erase_pos.lerp(local_pos, float(i) / float(steps)))
+			_erase_circle(_last_erase_pos.lerp(img_pos, float(i) / float(steps)), img_radius)
 	else:
-		_erase_circle(local_pos)
-	_last_erase_pos = local_pos
+		_erase_circle(img_pos, img_radius)
+	_last_erase_pos = img_pos
 
-func _erase_circle(center: Vector2) -> void:
+func _erase_circle(center: Vector2, radius: float) -> void:
 	var cx: int = int(center.x)
 	var cy: int = int(center.y)
-	var r: int = int(brush_size)
+	var r: int = maxi(int(radius), 1)
 	var r_sq: int = r * r
 	# Ограничиваем цикл границами изображения — set_pixel вне границ недопустим.
 	var x0: int = maxi(cx - r, 0)
@@ -156,24 +224,31 @@ func _erase_circle(center: Vector2) -> void:
 			var dx: int = x - cx
 			if dx * dx + dy * dy <= r_sq and dirt_image.get_pixel(x, y).a > 0.0:
 				dirt_image.set_pixel(x, y, TRANSPARENT)
+				dirt_left -= 1
 				erased_any = true
 	if erased_any:
 		_tex_dirty = true
-		_dbg_erase_count += 1
-		if _dbg_erase_count % 20 == 1:
-			print("[DEBUG] CleanStage: стирание #%d в local=%s" % [_dbg_erase_count, str(center)])
+		_erased_this_frame = true
+		var now: float = Time.get_ticks_msec() / 1000.0
+		if now - _last_burst_time >= BURST_INTERVAL:
+			_last_burst_time = now
+			var px_to_rect := Vector2(dirt_texture_rect.size.x / float(dirt_image.get_width()), dirt_texture_rect.size.y / float(dirt_image.get_height()))
+			FX.burst(dirt_texture_rect, center * px_to_rect, BURST_COLOR)
+
+func _try_play_scrape() -> void:
+	if not is_erasing or _finished or _scrape_player.stream == null:
+		return
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if now - _last_scrape_time >= SCRAPE_INTERVAL:
+		_last_scrape_time = now
+		_scrape_player.play()
 
 func _recount_progress() -> void:
 	if _finished or dirt_image == null:
 		return
-	clean_pixels = 0
-	for y in range(dirt_image.get_height()):
-		for x in range(dirt_image.get_width()):
-			if dirt_image.get_pixel(x, y).a <= 0.0:
-				clean_pixels += 1
-	var progress: float = clampf(float(clean_pixels) / float(total_pixels), 0.0, 1.0)
+	# Прогресс = доля стёртых пикселей от исходного количества грязи.
+	var progress: float = clampf(1.0 - float(dirt_left) / float(total_pixels), 0.0, 1.0)
 	progress_bar.value = progress
-	print("[DEBUG] CleanStage: прогресс %.1f%% (clean=%d/%d)" % [progress * 100.0, clean_pixels, total_pixels])
 	if progress >= COMPLETE_THRESHOLD:
 		_finish_stage(progress)
 
@@ -182,10 +257,21 @@ func _finish_stage(progress: float) -> void:
 	is_erasing = false
 	set_process_input(false)
 	_progress_timer.stop()
-	print("[STUB] Очистка завершена на 85%+. Переход к следующему этапу")
+	_scrape_player.stop()
+	_sfx_player.stream = SFX.get_stream("complete")
+	_sfx_player.play()
+	SFX.vibrate(40)
 	stage_finished.emit(progress)
 
+func _exit_tree() -> void:
+	_stop_sounds()
+
+func _stop_sounds() -> void:
+	if _scrape_player != null:
+		_scrape_player.stop()
+	if _sfx_player != null:
+		_sfx_player.stop()
+
 func _on_back_pressed() -> void:
-	# Возврат в Hub через перезагрузку корневой сцены (роутер Main.tscn).
-	# Роутер уничтожает экраны перед показом новых — утечек нет.
-	get_tree().reload_current_scene()
+	_stop_sounds()
+	back_requested.emit()

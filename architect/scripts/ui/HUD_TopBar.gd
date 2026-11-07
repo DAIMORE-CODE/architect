@@ -6,8 +6,10 @@ extends HBoxContainer
 
 # --- Привязка узлов (явные пути, @onready вместо @export) -------------------
 
-@onready var lbl_coins: Label = $CoinsBox/CoinsLabel
-@onready var lbl_energy: Label = $EnergyBox/EnergyLabel
+@onready var lbl_coins: Label = $CoinsPanel/CoinsBox/CoinsLabel
+@onready var lbl_energy: Label = $EnergyPanel/EnergyBox/EnergyLabel
+@onready var icon_coin: TextureRect = $CoinsPanel/CoinsBox/CoinIcon
+@onready var icon_energy: TextureRect = $EnergyPanel/EnergyBox/EnergyIcon
 
 func _enter_tree() -> void:
 	GameData.coins_changed.connect(_on_coins_changed)
@@ -20,7 +22,9 @@ func _exit_tree() -> void:
 		GameData.energy_changed.disconnect(_on_energy_changed)
 
 func _ready() -> void:
-	_refresh(GameData.coins, GameData.energy_current, GameData.MAX_ENERGY_PER_DAY)
+	icon_coin.texture = ItemArt.load_icon("res://assets/ui/icon_coin.png")
+	icon_energy.texture = ItemArt.load_icon("res://assets/ui/icon_energy.png")
+	_refresh(GameData.coins, GameData.energy_current, GameData.get_energy_max())
 
 func _on_coins_changed(new_amount: int) -> void:
 	if lbl_coins != null:

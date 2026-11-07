@@ -10,13 +10,8 @@ signal data_loaded
 
 const START_COINS: int = 100
 
-# ВРЕМЕННО (для тестирования прототипа): увеличено на несколько реставраций сразу.
-# TODO(Step 5): вернуть 5 и добавить экран восстановления энергии (реклама/покупка).
-# ⚠️ ВРЕМЕННО (тесты прототипа): энергия всегда не меньше 50, лимит не действует.
-# TODO(Step 5): вернуть MAX_ENERGY_PER_DAY = 5 и включить clampi в сеттере.
-const MAX_ENERGY_PER_DAY: int = 50   # базовое дневное ограничение (ТЗ: 5)
-const TEST_START_ENERGY: int = 50    # стартовая энергия при первом запуске/новом дне
-const MIN_TEST_ENERGY: int = 50      # ⚠️ ВРЕМЕННО: нижняя граница энергии для тестов (TODO Step 5: удалить)
+const MAX_ENERGY_PER_DAY: int = 5   # базовое дневное ограничение (ТЗ: 5)
+const SESSION_ENERGY_COST: int = 2  # стоимость одной сессии из нескольких предметов (D-022)
 
 var _loading := false
 
@@ -27,14 +22,10 @@ var coins: int = START_COINS:
 		if not _loading:
 			SaveManager.request_save()
 
-var energy_current: int = TEST_START_ENERGY:
+var energy_current: int = MAX_ENERGY_PER_DAY:
 	set(value):
-		# ⚠️ ВРЕМЕННО: clampi отключён, энергия всегда не меньше 50 (тесты прототипа).
-		# TODO(Step 5): вернуть: energy_current = clampi(value, 0, MAX_ENERGY_PER_DAY)
 		energy_current = maxi(0, value)
-		if energy_current < MIN_TEST_ENERGY:
-			energy_current = MIN_TEST_ENERGY
-		energy_changed.emit(energy_current, MAX_ENERGY_PER_DAY)
+		energy_changed.emit(energy_current, get_energy_max())
 		if not _loading:
 			SaveManager.request_save()
 
@@ -44,8 +35,18 @@ var museum_items: Dictionary = {}
 ## Купленные постоянные улучшения инструментов: { "clean_speed_lvl1": true, ... }
 var upgrades: Dictionary = {}
 
-## Купленные расходники (одноразовые): { "instant_clean": 2, "assembly_hint": 1 }
+## Купленные расходники (одноразовые): { "polish": 1, "hint": 2 }
 var consumables: Dictionary = {}
+
+## Сколько предметов реставрировано за всё время (для лёгкого режима первых предметов).
+var items_completed: int = 0
+
+## Категории, за которые уже выдана награда: { "watches": true, ... }
+var rewarded_categories: Dictionary = {}
+
+## Завершённые сессии за текущий день; sessions_day — индекс дня, к которому относится счётчик.
+var sessions_today: int = 0
+var sessions_day: int = -1
 
 func _ready() -> void:
 	DayCycle.new_day.connect(_on_new_day)
@@ -68,21 +69,23 @@ func spend_coins(amount: int) -> bool:
 # --- Энергия ----------------------------------------------------------------
 
 func can_play() -> bool:
-	return energy_current > 0
+	return energy_current >= SESSION_ENERGY_COST
 
 func spend_energy() -> bool:
 	if not can_play():
 		return false
-	energy_current -= 1
+	energy_current -= SESSION_ENERGY_COST
 	return true
 
 func add_energy(amount: int = 1) -> void:
-	# Например, после просмотра rewarded-рекламы: +1 попытка.
+	# Например, после просмотра rewarded-рекламы: +1 попытка сверх дневного лимита.
 	energy_current += amount
 
+func get_energy_max() -> int:
+	return maxi(MAX_ENERGY_PER_DAY, energy_current)
+
 func reset_energy() -> void:
-	# ВРЕМЕННО: стартовая энергия повышена для тестирования (см. TODO выше).
-	energy_current = TEST_START_ENERGY
+	energy_current = MAX_ENERGY_PER_DAY
 
 # --- Музей ------------------------------------------------------------------
 
@@ -126,6 +129,32 @@ func use_consumable(consumable_id: String) -> bool:
 	SaveManager.request_save()
 	return true
 
+func register_item_completed() -> void:
+	items_completed += 1
+	SaveManager.request_save()
+
+func register_session_completed() -> void:
+	_sync_sessions_day()
+	sessions_today += 1
+	SaveManager.request_save()
+
+func get_sessions_today() -> int:
+	_sync_sessions_day()
+	return sessions_today
+
+func _sync_sessions_day() -> void:
+	var day := DayCycle.get_day_index()
+	if sessions_day != day:
+		sessions_day = day
+		sessions_today = 0
+
+func is_category_rewarded(category_id: String) -> bool:
+	return rewarded_categories.has(category_id)
+
+func mark_category_rewarded(category_id: String) -> void:
+	rewarded_categories[category_id] = true
+	SaveManager.request_save()
+
 # --- Сериализация (для SaveManager) -------------------------------------------
 
 func to_dict() -> Dictionary:
@@ -135,17 +164,26 @@ func to_dict() -> Dictionary:
 		"museum_items": museum_items,
 		"upgrades": upgrades,
 		"consumables": consumables,
+		"items_completed": items_completed,
+		"rewarded_categories": rewarded_categories,
+		"sessions_today": sessions_today,
+		"sessions_day": sessions_day,
 	}
 
 func from_dict(data: Dictionary) -> void:
 	_loading = true
 	coins = int(data.get("coins", START_COINS))
-	energy_current = int(data.get("energy_current", TEST_START_ENERGY))
+	energy_current = int(data.get("energy_current", MAX_ENERGY_PER_DAY))
 	if typeof(data.get("museum_items", {})) == TYPE_DICTIONARY:
 		museum_items = data["museum_items"]
 	if typeof(data.get("upgrades", {})) == TYPE_DICTIONARY:
 		upgrades = data["upgrades"]
 	if typeof(data.get("consumables", {})) == TYPE_DICTIONARY:
 		consumables = data["consumables"]
+	items_completed = int(data.get("items_completed", 0))
+	if typeof(data.get("rewarded_categories", {})) == TYPE_DICTIONARY:
+		rewarded_categories = data.get("rewarded_categories", {})
+	sessions_today = int(data.get("sessions_today", 0))
+	sessions_day = int(data.get("sessions_day", -1))
 	_loading = false
 	data_loaded.emit()

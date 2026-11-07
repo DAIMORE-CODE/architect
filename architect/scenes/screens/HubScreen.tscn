@@ -1,21 +1,30 @@
-[gd_scene load_steps=3 format=3 uid="uid://chubscreen001"]
+[gd_scene format=3 uid="uid://chubscreen001"]
 
-[ext_resource type="Script" path="res://scripts/screens/HubScreen.gd" id="1_hub"]
+[ext_resource type="Script" uid="uid://bfiwxb0y172sh" path="res://scripts/screens/HubScreen.gd" id="1_hub"]
 [ext_resource type="PackedScene" uid="uid://chudtopbar01" path="res://scenes/ui/HUD_TopBar.tscn" id="2_topbar"]
+[ext_resource type="Texture2D" path="res://assets/ui/workbench_bg.png" id="3_bench"]
+[ext_resource type="Texture2D" path="res://assets/ui/logo.png" id="4_logo"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_workbench"]
-bg_color = Color(0.24, 0.2, 0.16, 1)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(0.45, 0.38, 0.3, 1)
+bg_color = Color(0.961, 0.922, 0.851, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.549, 0.416, 0.275, 1)
 corner_radius_top_left = 16
 corner_radius_top_right = 16
 corner_radius_bottom_right = 16
 corner_radius_bottom_left = 16
 
-[node name="HubScreen" type="Control"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dot"]
+bg_color = Color(0.753, 0.224, 0.169, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="HubScreen" type="Control" unique_id=941766423]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -24,7 +33,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_hub")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="TextureRect" parent="." unique_id=1179037158]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -32,9 +41,11 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.13, 0.11, 0.1, 1)
+texture = ExtResource("3_bench")
+expand_mode = 1
+stretch_mode = 6
 
-[node name="RootMargin" type="MarginContainer" parent="."]
+[node name="RootMargin" type="MarginContainer" parent="." unique_id=1817982153]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -46,18 +57,25 @@ theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 20
 
-[node name="VBox" type="VBoxContainer" parent="RootMargin"]
+[node name="VBox" type="VBoxContainer" parent="RootMargin" unique_id=919681849]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="TopBar" parent="RootMargin/VBox" instance=ExtResource("2_topbar")]
+[node name="Logo" type="TextureRect" parent="RootMargin/VBox" unique_id=503117402]
+custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
+size_flags_horizontal = 4
+texture = ExtResource("4_logo")
+expand_mode = 1
+stretch_mode = 5
 
-[node name="WorkbenchArea" type="Control" parent="RootMargin/VBox"]
+[node name="TopBar" parent="RootMargin/VBox" unique_id=941468 instance=ExtResource("2_topbar")]
+
+[node name="WorkbenchArea" type="Control" parent="RootMargin/VBox" unique_id=569877629]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Workbench" type="Panel" parent="RootMargin/VBox/WorkbenchArea"]
+[node name="Workbench" type="Panel" parent="RootMargin/VBox/WorkbenchArea" unique_id=1771224530]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -72,7 +90,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_workbench")
 
-[node name="WorkbenchMargin" type="MarginContainer" parent="RootMargin/VBox/WorkbenchArea/Workbench"]
+[node name="WorkbenchMargin" type="MarginContainer" parent="RootMargin/VBox/WorkbenchArea/Workbench" unique_id=1991156098]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -84,7 +102,7 @@ theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 16
 
-[node name="ItemPlaceholder" type="TextureRect" parent="RootMargin/VBox/WorkbenchArea/Workbench"]
+[node name="ItemPlaceholder" type="TextureRect" parent="RootMargin/VBox/WorkbenchArea/Workbench" unique_id=1627761148]
 self_modulate = Color(1, 1, 1, 0.55)
 layout_mode = 1
 anchors_preset = 15
@@ -99,7 +117,7 @@ grow_vertical = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="WorkbenchTitle" type="Label" parent="RootMargin/VBox/WorkbenchArea/Workbench"]
+[node name="WorkbenchTitle" type="Label" parent="RootMargin/VBox/WorkbenchArea/Workbench" unique_id=750568130]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
@@ -109,7 +127,7 @@ grow_horizontal = 2
 text = "Сегодня: Старинные часы"
 horizontal_alignment = 1
 
-[node name="WorkbenchSubtitle" type="Label" parent="RootMargin/VBox/WorkbenchArea/Workbench"]
+[node name="WorkbenchSubtitle" type="Label" parent="RootMargin/VBox/WorkbenchArea/Workbench" unique_id=767751305]
 modulate = Color(1, 1, 1, 0.6)
 layout_mode = 1
 anchors_preset = 12
@@ -123,41 +141,41 @@ text = "Требуется реставрация (плейсхолдер до A
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="ButtonsBox" type="HBoxContainer" parent="RootMargin/VBox"]
-custom_minimum_size = Vector2(0, 64)
+[node name="ButtonsBox" type="HBoxContainer" parent="RootMargin/VBox" unique_id=2030568254]
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 12
+alignment = 1
 
-[node name="BtnStart" type="Button" parent="RootMargin/VBox/ButtonsBox"]
-custom_minimum_size = Vector2(0, 64)
+[node name="BtnStart" type="Button" parent="RootMargin/VBox/ButtonsBox" unique_id=1842187475]
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Начать реставрацию"
 text_overrun_behavior = 3
 
-[node name="BtnMuseum" type="Button" parent="RootMargin/VBox/ButtonsBox"]
-custom_minimum_size = Vector2(0, 64)
+[node name="BtnMuseum" type="Button" parent="RootMargin/VBox/ButtonsBox" unique_id=808134195]
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Музей"
 text_overrun_behavior = 3
 
-[node name="BtnShop" type="Button" parent="RootMargin/VBox/ButtonsBox"]
-custom_minimum_size = Vector2(0, 64)
+[node name="BtnShop" type="Button" parent="RootMargin/VBox/ButtonsBox" unique_id=1541411192]
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Магазин"
 text_overrun_behavior = 3
 
-[node name="BtnDaily" type="Button" parent="RootMargin/VBox/ButtonsBox"]
-custom_minimum_size = Vector2(0, 64)
+[node name="BtnDaily" type="Button" parent="RootMargin/VBox/ButtonsBox" unique_id=278554536]
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Ежедневная награда"
 text_overrun_behavior = 3
 
-[node name="DailyDot" type="ColorRect" parent="RootMargin/VBox/ButtonsBox/BtnDaily"]
+[node name="DailyDot" type="Panel" parent="RootMargin/VBox/ButtonsBox/BtnDaily" unique_id=707916733]
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
@@ -168,5 +186,11 @@ offset_right = -6.0
 offset_bottom = 22.0
 grow_horizontal = 0
 mouse_filter = 2
-color = Color(0.9, 0.15, 0.15, 1)
+theme_override_styles/panel = SubResource("StyleBoxFlat_dot")
 
+[node name="BtnEnergyAd" type="Button" parent="RootMargin/VBox"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "+1 энергия (реклама)"
+text_overrun_behavior = 3

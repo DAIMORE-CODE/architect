@@ -2,24 +2,37 @@ extends Node
 ## YandexSDK — автозагрузка (Singleton). Скрипт-обёртка (stub) над Яндекс Games SDK.
 ##
 ## ВАЖНО (требование ТЗ): ВСЕ вызовы JavaScriptBridge строго обёрнуты в
-## проверку web (`OS.has_feature("web")`). Вне web (редактор Godot, Android-отладка)
-## отрабатывает безопасная заглушка: rewarded-реклама симулируется успешной через
-## 2 секунды и callback вызывается, ошибок не возникает.
+## проверку web (`OS.has_feature("web")`). В редакторе отрабатывает безопасная
+## заглушка: rewarded-реклама симулируется успешной через 2 секунды.
+## На Android реклама идёт через плагин GodotAndroidYandexAds (Yandex Mobile Ads);
+## без ANDROID_REWARDED_ID реклама не показывается и награда не выдаётся.
 
 signal sdk_initialized
 signal rewarded_ad_result(viewed: bool)
 
-const STUB_AD_DELAY := 2.0  # сек., симуляция просмотра рекламы в редакторе/Android
+const STUB_AD_DELAY := 2.0  # сек., симуляция просмотра рекламы в редакторе
+const ANDROID_REWARDED_ID := ""  # ID rewarded-блока Yandex Mobile Ads (заполняет PM)
+const ANDROID_LOAD_TIMEOUT := 15.0  # сек., защита от зависания при загрузке рекламы
+const YandexAdsScript = preload("res://addons/GodotAndroidYandexAds/yandex_ads.gd")
 
 var _initialized := false
 var _ad_showing := false
 var _is_web := false
+var _is_android := false
 var _js_callbacks := {}
 var _next_callback_id := 1
 var _global_registered := false
 
+var _android_ads: YandexAdsScript = null
+var _android_active := false
+var _android_loading := false
+var _android_granted := false
+var _android_callback := Callable()
+var _android_request_id := 0
+
 func _ready() -> void:
 	_is_web = OS.has_feature("web")
+	_is_android = OS.get_name() == "Android"
 	init()
 
 # --- Публичный API -----------------------------------------------------------
@@ -49,6 +62,8 @@ func init() -> void:
 			});
 		}""")
 		print("YandexSDK[web]: init отправлен")
+	elif _is_android:
+		_setup_android_ads()
 	else:
 		print("YandexSDK[stub]: не-web окружение, используется заглушка")
 	sdk_initialized.emit()
@@ -117,12 +132,88 @@ func show_rewarded_ad(callback: Callable = Callable()) -> void:
 			}
 		}
 		__ya_showRewarded(%d);""" % cb_id)
+	elif _is_android:
+		_show_android_rewarded(callback)
 	else:
-		# Безопасная заглушка (редактор/Android): симулируем успешный просмотр
+		# Безопасная заглушка (редактор): симулируем успешный просмотр
 		# через 2 секунды и вызываем callback — без единой ошибки.
 		print("YandexSDK[stub]: симуляция rewarded-рекламы (%.1f сек)" % STUB_AD_DELAY)
 		await get_tree().create_timer(STUB_AD_DELAY).timeout
 		_finish_rewarded(true, callback)
+
+# --- Android (плагин GodotAndroidYandexAds) -----------------------------------
+
+func _setup_android_ads() -> void:
+	if ANDROID_REWARDED_ID.is_empty():
+		push_warning("YandexSDK: ANDROID_REWARDED_ID не задан, rewarded-реклама отключена")
+		return
+	if not Engine.has_singleton("GodotAndroidYandexAds"):
+		push_warning("YandexSDK: Android-плагин GodotAndroidYandexAds не загружен")
+		return
+	var ads: YandexAdsScript = YandexAdsScript.new()
+	ads.rewarded_id = ANDROID_REWARDED_ID
+	ads.rewarded.connect(_on_android_rewarded)
+	ads.rewarded_video_loaded.connect(_on_android_loaded)
+	ads.rewarded_video_failed_to_load.connect(_on_android_failed_to_load)
+	ads.rewarded_video_closed.connect(_on_android_closed)
+	add_child(ads)
+	_android_ads = ads
+	_android_ads.load_rewarded_video()
+
+func _show_android_rewarded(callback: Callable) -> void:
+	if ANDROID_REWARDED_ID.is_empty():
+		push_warning("YandexSDK: ANDROID_REWARDED_ID не задан, награда не выдана")
+		_finish_rewarded(false, callback)
+		return
+	if _android_ads == null:
+		push_warning("YandexSDK: плагин рекламы не загружен, награда не выдана")
+		_finish_rewarded(false, callback)
+		return
+	_android_active = true
+	_android_granted = false
+	_android_callback = callback
+	_android_request_id += 1
+	if _android_ads.is_rewarded_video_loaded():
+		_android_loading = false
+		_android_ads.show_rewarded_video()
+	else:
+		_android_loading = true
+		_android_ads.load_rewarded_video()
+		_start_android_load_timeout(_android_request_id)
+
+func _start_android_load_timeout(request_id: int) -> void:
+	await get_tree().create_timer(ANDROID_LOAD_TIMEOUT).timeout
+	if _android_active and _android_loading and request_id == _android_request_id:
+		push_warning("YandexSDK: таймаут загрузки rewarded-рекламы")
+		_finish_android(false)
+
+func _on_android_loaded() -> void:
+	if _android_active and _android_loading:
+		_android_loading = false
+		_android_ads.show_rewarded_video()
+
+func _on_android_failed_to_load(error_code: int) -> void:
+	if _android_active and _android_loading:
+		push_warning("YandexSDK: rewarded не загрузился, код ошибки %d" % error_code)
+		_finish_android(false)
+
+func _on_android_rewarded(_currency: String, _amount: int) -> void:
+	if _android_active:
+		_android_granted = true
+
+func _on_android_closed() -> void:
+	if _android_active:
+		_finish_android(_android_granted)
+
+func _finish_android(viewed: bool) -> void:
+	var callback := _android_callback
+	_android_active = false
+	_android_loading = false
+	_android_granted = false
+	_android_callback = Callable()
+	_android_request_id += 1
+	_finish_rewarded(viewed, callback)
+	_android_ads.load_rewarded_video()
 
 # --- Внутреннее ---------------------------------------------------------------
 
